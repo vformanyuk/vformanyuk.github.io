@@ -36,6 +36,13 @@ body{
     color: white;
     text-decoration: none;
 }
+.header img{
+    flex: 0 0 60px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: block;
+    max-width: 100%;
+}
 
 .wrapper{
     display: flex;
@@ -61,12 +68,15 @@ body{
 .lang_selector{
     text-decoration: none;
     color: white;
+    margin: 2px;
 }
-.lang_selector_active{
-    text-decoration: none;
+.lang_selector.active{
+    /* text-decoration: none; */
     background-color: white;
     color: black;
     font-weight: bold;
+    border-radius: 50%;
+    padding: 4px;
 }
 
 .quote{
