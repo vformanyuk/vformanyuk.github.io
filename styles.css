@@ -107,7 +107,7 @@ body{
 
 @media (max-width:767px){
     .container{
-        max-width: none;
+        max-width: 370px;
     }
     .graph_container{
         text-align: left;
