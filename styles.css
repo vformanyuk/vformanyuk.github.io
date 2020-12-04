@@ -112,4 +112,7 @@ body{
     .graph_container{
         text-align: left;
     }
+    .quote{
+        padding: 5px;
+    }
 }
