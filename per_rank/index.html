@@ -1,26 +1,194 @@
 <html lang="en-US">
     <head>
         <link href="../styles.css" rel="stylesheet"/>
-        <meta name="viewport" content="width=device-width" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta charset="UTF-8"/>
+        <meta name="keywords" content="PER, Rank, Prioritized Experience Replay, reinforcement learning, RL">
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async
+                src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+        </script>
     </head>
     <body>
         <header class="header">
             <img src="../imgs/ava.png"/>
-            <span>
+            <!-- <span>
                 <a href="#" class="lang_selector">EN</a>
                 <a href="#" class="lang_selector active">RU</a>
-            </span>
+            </span> -->
         </header>
         <main class="wrapper">
             <section class="container">
                 <article>
                     <h2>Rank based Prioritized Experience Replay. Effective sampling intervals calculation method</h2>
                     <p style="word-wrap: normal;">
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                        The following article assumes reader is familiar with Prioritized Experience Replay paper 
+                        <a href="https://arxiv.org/abs/1511.05952" target="_blank" rel="noopener noreferrer">Prioritized Experience Replay paper</a>. 
+                    </p>
+                    <p>
+                        In short, it is a way to sample important transitions from replay buffer more frequently. 
+                        Authors define probability of sampling a particular transition as:
+                    </P>
+                    <p>
+                        $$P(i) = \frac{P_i^ \alpha }{ \sum_1^N P_k^ \alpha }$$
+                    </p>
+                    <p>
+                        Where &#593; &#8712; [0;1] and P&#7522; defined in two ways:</span>
+                    </p>
+                    <p>
+                        <ul>
+                            <li>
+                                P&#7522; = |TD error| + &#120576;
+                            </li>
+                            <li>
+                                P&#7522; = 1 / rank(i), where rank(i) is index of transition in array sorted by it’s |TD error|
+                                <p class="quote">
+                                    In this case P becomes a power-law distribution with exponent &#593;
+                                </p>
+                            </li>
+                        </ul>
+                    </p>
+                    <p>
+                        Let's look at <a href="https://en.wikipedia.org/wiki/Power_law" target="_blank" rel="noopener noreferrer">power-law distribution</a> with &#593;=0.5
+                    </p>
+                    <p class="graph_container">
+                        <img class="graph" src="../imgs/power_law_distribution_for_alpha_minus_one_half.png">
+                    </p>
+                    <p>
+                        In this article we will focus on rank based sampling approach.
+                    </p>
+                    <p>
+                        Let's also introduce some variables that will be used:
+                        <ul>
+                            <li>
+                                <b>N</b> - replay buffer length. For example, we will use <b>N</b>=1,000,000
+                            </li>
+                            <li>
+                                <b>K</b> - mini-batch size. For example, we'll use <b>K</b>=128
+                            </li>
+                            <li>
+                                <b>&#593;</b> - The exponent &#593; determines how much prioritization is
+                                used, with &#593; = 0 corresponding to the uniform case. We'll use <b>&#593;</b>=0.5
+                            </li>
+                        </ul>
+                    </p>
+                    <p>
+                        Prioritized Experience Replay paper authors give us an implementation hint:
                     </p>
                     <p class="quote">
-                        This is quotation
+                        For the rank-based variant, we can approximate the cumulative density function with a piecewise linear function with <b>k segments of equal probability</b>. 
+                        The segment boundaries can be precomputed(they change only when <b>N</b> or <b>&#593;</b> change). 
+                        At runtime, we sample a segment, and then sample uniformly among the transitions within it. 
+                        This works particularly well in conjunction with a minibatch-based learning algorithm: choose <b>k</b> to be the size of the minibatch, 
+                        and sample exactly one transition from each segment – this is a form of stratified sampling that has the added advantage of balancing out the minibatch (there will always be exactly one transition with high magnitude δ, one with medium magnitude, etc)
+                    </p>
+                    <p>
+                        We will return to this quotation during article build-up a few times. First of all, let’s look at first sentence:
+                    </p>
+                    <p class="quote">
+                        For the rank-based variant, we can approximate the cumulative density function with a piecewise linear function with <b>k segments of equal probability</b>
+                    </p>
+                    <p>
+                        Let's try to visualize mentioned segments:
+                    </p>
+                    <p class="graph_container">
+                        <img class="graph" src="../imgs/power_law_distribution_for_alpha_minus_one_half_with_sampling_intervals.png">
+                    </p>
+                    <p class="quote">
+                        At runtime, we sample a segment, and then sample uniformly among the transitions within it
+                    </p>
+                    <p>
+                        So, in order to sample the transitions we need to know the boundaries of a segment (<b>l1</b>, <b>l2</b>, <b>l3</b>.. <b>lN</b>) and for that – length (better to say area) of probability segment.
+                        To get area of probability segment (sampling interval) we can just take a probability total mass and divide it by <b>K</b>. 
+                        Then having sampling interval length calculated, the boundaries for each segment could be found.
+                    </p>
+                    <p>
+                        The naive approach expressed in python will look like this:
+                        <script src="https://gist.github.com/vformanyuk/919377292f395b455457048ffc2b7a01.js"></script>
+                    </p>
+                    <p>
+                        From computational point of view it is a disaster. We’re doing N iterations twice! If only there will be a way to compute sum of all P(k) faster, at lease first N iterations would be avoided.
+                    </p>
+                    <p>
+                        And to our luck, there is a way. Let’s look at denominator of P(i) fraction:
+                    </p>
+                    <p>
+                        $$\frac{1}{ rank(1)^\alpha } + \frac{1}{ rank(2)^\alpha } + \frac{1}{ rank(3)^\alpha } +  \cdots + \frac{1}{ rank(N)^\alpha }$$
+                    </p>
+                    <p>
+                        Considering a fact that rank(i)=n, where n &#8712; [1;N] (to avoid division by zero replay buffer's first index is 1) and using commutative property of sum, this could be written in following form:
+                    </p>
+                    <p>
+                        $$\frac{1}{ 1^\alpha } + \frac{1}{ 2^\alpha } + \frac{1}{ 3^\alpha } +  \cdots + \frac{1}{ N^\alpha }$$
+                    </p>
+                    <p>
+                        What we're looking at here is <b>p-series</b> (or <b>hyperharmonic</b> series) <a href="https://en.wikipedia.org/wiki/Harmonic_series_(mathematics)" target="_blank" rel="noopener noreferrer">Wiki page</a>
+                        (otherwise known as <a href="https://en.wikipedia.org/wiki/Riemann_zeta_function" target="_blank" rel="noopener noreferrer">Riemann zeta function</a>). 
+                        Calculating a partial sum ( or n-th harmonic number) is exactly what we need to improve computational performance.
+                    </p>
+                    <p>
+                        During my experiments I came across an article 
+                        <a href="http://www.mathnet.ru/php/archive.phtml?wshow=paper&jrnid=irj&paperid=251&option_lang=eng" target="_blank" rel="noopener noreferrer">On analogue of Eiler-Maskeroni constant and regularities of its change(RU)</a>
+                    </p>
+                    <p>
+                        In short, this paper is about S-th harmonic number and corresponding analogue of Eiler-Maskeroni constant approximation. 
+                        Authors proposed approximation method is following:
+                    </p>
+                    <p>
+                        $$H_{ns} = \frac{n^{1-s}-1}{1-s} +  \gamma _s +  \alpha (n)$$
+                    </p>
+                    <p>
+                        Where &#593;(n) - infinitely small number, which we will ignore, and &#120516; - analogue of Eiler-Maskeroni constant for a particular S that is approximated with following polinome
+                    </p>
+                    <p>
+                        $$Pm(s) = 1.01956 + 0.223632*s + 3.45985 * 10^{-2} *s^2 - 9.32331*10^{-4}*s^2 - 1.40047*10^{-5}*s^3 +7.63*10^{-6}*s^4$$
+                        $$\gamma_s = \frac{2}{ \pi }arctg(Pm(s))$$
+                    </p>
+                    <p>
+                        With this new knowledge, let's rewrite sampling intervals calculation code like this:
+                    </p>
+                    <p>
+                        <script src="https://gist.github.com/vformanyuk/34a8d143c74b22656e5be38bca66ca27.js"></script>
+                    </p>
+                    <p>
+                        Nice! We just reduced number of iterations from 2N to N. But can we do better? Yes!<br\>
+                        Let's think about partial sum once more. It is a sum of <b>K</b> sampling intervals (of length <b>L</b>). In other words
+                    </p>
+                    <p>
+                        $$H_{ns} = L*K$$
+                        $$L*K = \frac{n^{1-s}-1}{1-s} +  \gamma _s$$
+                    </p>
+                    <p>
+                        With a little bit of math rearangements, we get a reverse tool - equation that tells us length of an interval given it’s index (K) and length (L).
+                    </p>
+                    <p>
+                        $$n= e^{\frac{1}{1-s}*ln[(L*K - \gamma_s)(1-s) + 1]}$$
+                    </p>
+                    <p>
+                        With this tool in hand, second loop is only K iterations instead of N:
+                    </p>
+                    <p>
+                        <script src="https://gist.github.com/vformanyuk/b2e4fdae00f006fe396b2273ad5fa964.js"></script>
+                    </p>
+                    <p>
+                        Of course, as this is approximated calculations, the intervals boundaries are not the same (<i>thou very close!</i>) as when calculated in a strict way (with 2 N loops).
+                        But due to stochastic nature of sampling, misses could be safely ignored.
+                    </p>
+                    <p>
+                        Complete code examples:
+                        <ul>
+                            <li>
+                                Replay buffer with rank based Prioritized Experience Replay and Importance Sampling: 
+                                <a href="https://github.com/vformanyuk/reinforcement-learning/blob/master/rl_utils/SARST_Rank_Priority_MemoryBuffer.py" target="_blank" rel="noopener noreferrer">SARST_Rank_Priority_MemoryBuffer.py</a>
+                            </li>
+                            <li>
+                                LunarLander-v2 TensorFlow2 training script: 
+                                <a href="https://github.com/vformanyuk/reinforcement-learning/blob/master/lunar_lander_double_dueling_DQN_IS_rank.py" target="_blank" rel="noopener noreferrer">lunar_lander_double_dueling_DQN_IS_rank.py</a>
+                            </li>
+                        </ul>
+                    </p>
+                    <p>
+                        Thank you!
                     </p>
                 </article>
             </section>
